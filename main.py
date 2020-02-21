@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 load_dotenv()
 email_username = os.getenv("EMAIL_USER")
 email_to = os.getenv("EMAIL_TO")
+email_me = os.getenv("EMAIL_ME")
 email_pass = os.getenv("EMAIL_PASS")
 api_url = os.getenv("API_URL")
 graph_url = os.getenv("GRAPH_URL")
@@ -15,6 +16,33 @@ def getPrice():
     r = requests.get(api_url + str(item_id))
     response = r.json()
     return response["item"]["current"]["price"]
+
+
+def sendEmail(initial_price):
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
+        smtp.login(email_username, email_pass)
+        subject = "Gold Ore"
+        body = getData()
+        alt = "Will send another update once price reaches " + str(initial_price + 5)
+        msg = f"Subject: {subject}\n\n{body}\n{alt}"
+        smtp.sendmail(email_username, email_to, msg)
+        smtp.sendmail(email_username, email_me, msg)
+
+
+def sendEmailAfter(initial_price):
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
+        smtp.login(email_username, email_pass)
+        subject = "Gold Ore"
+        body = getData()
+        alt = (
+            "Will send another update once price reaches "
+            + str(initial_price + 5)
+            + " or "
+            + str(initial_price - 5)
+        )
+        msg = f"Subject: {subject}\n\n{body}\n{alt}"
+        smtp.sendmail(email_username, email_to, msg)
+        smtp.sendmail(email_username, email_me, msg)
 
 
 # Text in a human readable format
@@ -48,15 +76,25 @@ def getData():
 
 
 # Infinite loop to run continuously, check every 15 mins
+initial_price = 350
+reached = False
+reached_price = 0
+sub_price = 0
 while True:
     if datetime.today().minute % 15 == 0:
-        if getPrice() > 350:
-            with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
-                smtp.login(email_username, email_pass)
-                subject = "Gold Ore"
-                body = getData()
-                msg = f"Subject: {subject}\n\n{body}"
-                smtp.sendmail(email_username, email_to, msg)
-                print("SENT")
-        time.sleep(60)
+        if reached and getPrice() % 5 == 0:
+            if getPrice() == reached_price:
+                sendEmailAfter(reached_price)
+                sub_price = reached_price - 5
+                reached_price += 5
+            elif getPrice() == sub_price:
+                sendEmailAfter(sub_price)
+                reached_price = sub_price + 5
+                sub_price -= 5
 
+        elif getPrice() >= 350:
+            reached = True
+            reached_price = getPrice() + 5  # 355
+            sub_price = getPrice() - 5  # 345
+            sendEmailAfter(350)
+        time.sleep(60)
